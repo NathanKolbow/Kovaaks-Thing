@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import globals
+from mathemagics import ExpandCurve
 
 
 CHALLENGE_DATA = {}
@@ -83,22 +84,38 @@ def main():
     for k in CHALLENGE_DATA:
         CHALLENGE_DATA[k] = sorted(CHALLENGE_DATA[k], key=lambda i: i['_datetime'])
 
-    print(CHALLENGE_DATA)
-
     # All of the info for every session is now in UNIQUE_CHALLENGES,
     # so now we build the window for viewing this info
     layout = [
         [
-            sg.Combo(UNIQUE_CHALLENGES, key='Challenge-Selector',
-                     default_value=UNIQUE_CHALLENGES[0], enable_events=True),
-            sg.Button("Toggle Text", key='Text-Toggle'),
-            sg.Button("Toggle Max", key='Max-Toggle')
-        ],
-        [
-            # GRAPH_COORDS will probably have to be dynamic somehow at some point
-            sg.Graph(globals.GRAPH_SIZE, globals.GRAPH_COORDS_BOTTOM_LEFT,
-                     globals.GRAPH_COORDS_TOP_RIGHT, background_color='black',
-                     key='Stats-Graph')
+            sg.Column([
+                [
+                    # GRAPH_COORDS will probably have to be dynamic somehow at some point
+                    sg.Graph(globals.GRAPH_SIZE, globals.GRAPH_COORDS_BOTTOM_LEFT,
+                             globals.GRAPH_COORDS_TOP_RIGHT, background_color='black',
+                             key='Stats-Graph')
+                ]
+            ]),
+            sg.Column([
+                [
+                    sg.Combo(UNIQUE_CHALLENGES, key='Challenge-Selector',
+                             default_value=UNIQUE_CHALLENGES[0], enable_events=True),
+                    sg.Button("Toggle Text", key='Text-Toggle'),
+                    sg.Button("Toggle Max", key='Max-Toggle')
+                ],
+                [
+                    sg.Button("On", key="Accuracy-Toggle"),
+                    sg.Text("Toggle Accuracy Line")
+                ],
+                [
+                    sg.Button("On", key="Score-Toggle"),
+                    sg.Text("Toggle Score Line")
+                ],
+                [
+                    sg.Button("On", key="Adjusted-Toggle"),
+                    sg.Text("Toggle Adjusted Score Line")
+                ]
+            ])
         ]
     ]
     WINDOW = sg.Window("Analysis", layout)
@@ -136,11 +153,15 @@ def draw_stats(challenge_name):
     temp = [x['general_data']['Score'] for x in list]
     max_score = max(temp)
     min_score = min(temp)
+    temp = [x['general_data']['Score'] / x['general_data']['Accuracy'] for x in list]
+    max_score = max(max(temp), max_score)
+    min_score = min(min(temp), min_score)
     diff_score = max_score - min_score if not max_score == min_score else 1
 
     step_size = 0 if len(list) == 1 else globals.GRAPH_BOUNDARIES[1][1] / (len(list) - 1)
     last_score_loc = (-1, -1)
     last_acc_loc = (-1, -1)
+    last_true_score_loc = (-1, -1)
     for i in range(0, len(list)):
         score = list[i]['general_data']['Score']
         if MAX_STATUS:
@@ -148,23 +169,45 @@ def draw_stats(challenge_name):
                          * globals.GRAPH_BOUNDARIES[1][1])
         else:
             score_loc = (i * step_size, (score/max_score) * globals.GRAPH_BOUNDARIES[1][1])
-        WINDOW['Stats-Graph'].DrawPoint(score_loc, size=10, color='green')
+        WINDOW['Stats-Graph'].DrawPoint(score_loc, size=5, color='green')
         if DRAW_TEXT:
             WINDOW['Stats-Graph'].DrawText(str(round(score, 2)),
                                            (score_loc[0], score_loc[1] + 15), color='green')
         if last_score_loc != (-1, -1):
-            WINDOW['Stats-Graph'].DrawLine(last_score_loc, score_loc, color='green', width=1)
+            draw_curve(last_score_loc, score_loc, 'green')
         last_score_loc = score_loc
 
         acc = list[i]['general_data']['Accuracy']
         acc_loc = (i * step_size, acc * globals.GRAPH_BOUNDARIES[1][1])
-        WINDOW['Stats-Graph'].DrawPoint(acc_loc, size=10, color='red')
+        WINDOW['Stats-Graph'].DrawPoint(acc_loc, size=5, color='red')
         if DRAW_TEXT:
             WINDOW['Stats-Graph'].DrawText(str(round(acc*100, 2)),
                                            (acc_loc[0], acc_loc[1] + 15), color='red')
         if last_acc_loc != (-1, -1):
-            WINDOW['Stats-Graph'].DrawLine(last_acc_loc, acc_loc, color='red', width=1)
+            draw_curve(last_acc_loc, acc_loc, 'red')
         last_acc_loc = acc_loc
+
+        true_score = score/acc
+        if MAX_STATUS:
+            true_score_loc = (i * step_size, ((true_score - min_score)/(diff_score))
+                              * globals.GRAPH_BOUNDARIES[1][1])
+        else:
+            true_score_loc = (i * step_size, (true_score/max_score)
+                              * globals.GRAPH_BOUNDARIES[1][1])
+        WINDOW['Stats-Graph'].DrawPoint(true_score_loc, size=5, color='blue')
+        if DRAW_TEXT:
+            WINDOW['Stats-Graph'].DrawText(str(round(true_score, 2)),
+                                           (true_score_loc[0], true_score_loc[1] + 15),
+                                           color='blue')
+        if last_true_score_loc != (-1, -1):
+            draw_curve(last_true_score_loc, true_score_loc, 'blue')
+        last_true_score_loc = true_score_loc
+
+
+def draw_curve(from_loc, to_loc, color):
+    list = ExpandCurve(from_loc[0], to_loc[0], from_loc[1], to_loc[1])
+    for i in range(1, len(list)):
+        WINDOW['Stats-Graph'].DrawLine(list[i-1], list[i], color=color, width=0.5)
 
 
 def process_stats(file):
