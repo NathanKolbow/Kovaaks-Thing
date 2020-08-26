@@ -1,10 +1,8 @@
 from math import log
 
-"""
-    Basically clamps eval between (-1750, 1750) and linearly maps that range to (-95, 95)
-"""
 
-
+# Basically clamps eval between (-1750, 1750) and linearly maps 
+# that range to (-95, 95)
 def TransformLinear(eval):
     if eval > 1750:
         return 95
